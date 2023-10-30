@@ -10,17 +10,35 @@ migrate = Migrate(app, db)
 
 
 class Todo(db.Model):
+    __tablename__ = "todo"
     id = db.Column(db.Integer, primary_key=True)
     description = db.Column(db.String, nullable=False)
     completed = db.Column(db.Boolean, nullable=False, default=False)
+    list_id = db.Column(db.Integer, db.ForeignKey("todolist.id"), nullable=False)
 
     def __repr__(self) -> str:
         return f"<Todo {self.id}: {self.description}>"
 
 
+class TodoList(db.Model):
+    __tablename__ = "todolist"
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String, nullable=False)
+    todos = db.relationship("Todo", backref="list", lazy=True)
+
+
+@app.route("/list/<list_id>")
+def get_list_todos(list_id):
+    return render_template(
+        "index.html",
+        list=TodoList.query.all(),
+        todos=Todo.query.filter_by(list_id=list_id).order_by("id").all(),
+    )
+
+
 @app.route("/")
 def index():
-    return render_template("index.html", todos=Todo.query.order_by("id").all())
+    return redirect(url_for("get_list_todos", list_id=1))
 
 
 @app.route("/todos/create", methods=["POST"])
@@ -33,8 +51,9 @@ def create():
         description = data.get("description")
         todo.description = description
         todo.completed = False
-        body["description"] = todo.description
+        body["id"] = todo.id
         body["completed"] = todo.completed
+        body["description"] = todo.description
         db.session.add(todo)
         db.session.commit()
     except:
